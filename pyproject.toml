@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terminal-football-manager"
+version = "0.1.32"
+authors = [
+  { name="TaremwaStudios", email="author@example.com" },
+]
+description = "A terminal-based football manager game with rich UI."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "rich",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/TaremwaStudios/TaremwaStudios"
+"Bug Tracker" = "https://github.com/TaremwaStudios/TaremwaStudios/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["terminal_football_manager*"]
