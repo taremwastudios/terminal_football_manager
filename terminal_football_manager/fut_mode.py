@@ -86,7 +86,97 @@ class Auction:
             datetime.fromisoformat(data["end_time"])
         )
 
+def simulate_market_activity(fut_club):
+    """Simulates rival bids on active auctions."""
+    now = datetime.now()
+    activity_count = 0
+    
+    # 1. Simulate new listings if market is empty-ish
+    if len(fut_club.transfer_market) < 5:
+        for _ in range(random.randint(1, 3)):
+            new_player = _generate_random_player(70, 85)
+            # Create a realistic listing
+            end_time = now + timedelta(hours=random.randint(1, 24))
+            start_bid = new_player.market_value // 2 # Start low to encourage bidding
+            auction = Auction(new_player, f"Manager_{random.randint(100, 999)}", start_bid, end_time)
+            fut_club.transfer_market.append(auction)
+            activity_count += 1
+
+    # 2. Simulate rival bids on existing auctions
+    for auc in fut_club.transfer_market:
+        if auc.end_time > now:
+            # Chance of a rival bid increases as time runs out or if it's a good deal
+            time_left = (auc.end_time - now).total_seconds()
+            bid_chance = 0.1 # Base chance
+            if time_left < 3600: bid_chance += 0.2 # Last hour frenzy
+            if auc.current_bid < auc.player.market_value * 0.8: bid_chance += 0.3 # Good deal
+            
+            if random.random() < bid_chance:
+                increment = int(auc.current_bid * random.uniform(0.05, 0.15))
+                new_bid = auc.current_bid + increment
+                auc.current_bid = new_bid
+                auc.highest_bidder = f"Manager_{random.randint(100, 999)}"
+                
+                # Notification if user was outbid
+                if auc in fut_club.my_bids:
+                    # Could add a notification system here
+                    pass
+
+    # 3. Clean up expired auctions
+    active_auctions = []
+    for auc in fut_club.transfer_market:
+        if auc.end_time > now:
+            active_auctions.append(auc)
+        else:
+            # Auction ended
+            if auc.highest_bidder == "YOU":
+                fut_club.add_player(auc.player)
+                console.print(Panel(f"[bold green]WON AUCTION![/bold green] You signed {auc.player.name} for €{auc.current_bid:,}!", style="green"))
+                if auc in fut_club.my_bids: fut_club.my_bids.remove(auc)
+            elif auc in fut_club.my_bids:
+                console.print(Panel(f"[bold red]LOST AUCTION[/bold red] {auc.player.name} sold to {auc.highest_bidder} for €{auc.current_bid:,}.", style="red"))
+                fut_club.my_bids.remove(auc)
+    
+    fut_club.transfer_market = active_auctions
+
+def train_players(fut_club):
+    while True:
+        console.print("\n[bold blue]--- Training Ground ---[/bold blue]")
+        console.print(f"Budget: [green]€{fut_club.budget:,}[/green]")
+        console.print("Boost stats for your squad. Cost: €5,000 per session.")
+        
+        eligible = [p for p in fut_club.players if p.injury_days == 0]
+        for i, p in enumerate(eligible[:10]): # Show top 10
+             console.print(f"[{i+1}] {p.name} (OVR: {p.ovr})")
+        
+        choice = console.input("[bold yellow]Select player to train (or 0 to back): [/bold yellow]")
+        if choice == '0': break
+        
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(eligible):
+                player = eligible[idx]
+                cost = 5000
+                if fut_club.budget >= cost:
+                    fut_club.budget -= cost
+                    improvement = random.randint(1, 3)
+                    # Boost random attribute
+                    attr = random.choice(list(player.attributes.keys()))
+                    player.attributes[attr] += improvement
+                    console.print(f"[green]Success! {player.name}'s {attr} improved by +{improvement}.[/green]")
+                    
+                    # Small chance to boost OVR
+                    if random.random() < 0.2:
+                        player.ovr += 1
+                        console.print(f"[bold gold1]{player.name} leveled up! OVR is now {player.ovr}![/bold gold1]")
+                else:
+                    console.print("[red]Not enough coins![/red]")
+        except ValueError:
+            console.print("[red]Invalid input.[/red]")
+
 def run_transfer_market(fut_club):
+    simulate_market_activity(fut_club) # Simulate activity on entry
+    
     while True:
         console.print("\n[bold blue]--- FUT Transfer Market ---[/bold blue]")
         console.print(f"Your Budget: [green]€{fut_club.budget:,}[/green]")

@@ -105,6 +105,14 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
     home_ovr = home_team.get_team_ovr()
     away_ovr = away_team.get_team_ovr()
 
+    # Filter available players (Not Injured, Not Banned)
+    home_eligible = [p for p in home_team.players if p.injury_days == 0 and not p.is_banned]
+    away_eligible = [p for p in away_team.players if p.injury_days == 0 and not p.is_banned]
+    
+    # Emergency fallback if everyone is injured/banned (highly unlikely)
+    if not home_eligible: home_eligible = home_team.players
+    if not away_eligible: away_eligible = away_team.players
+
     # Minute-by-minute loop
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
         if is_user_involved:
@@ -116,10 +124,15 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
                 if minute % 15 == 0: time.sleep(0.3)
 
             if random.random() < 0.12: # Event chance
-                attacking_team = home_team if random.random() < (home_ovr / (home_ovr + away_ovr)) else away_team
-                defending_team = away_team if attacking_team == home_team else home_team
-                player = random.choice(attacking_team.players)
-                keeper = defending_team.get_starting_goalkeeper()
+                attacking_team_obj = home_team if random.random() < (home_ovr / (home_ovr + away_ovr)) else away_team
+                defending_team_obj = away_team if attacking_team_obj == home_team else home_team
+                
+                # Pick from eligible players only
+                attacker_pool = home_eligible if attacking_team_obj == home_team else away_eligible
+                if not attacker_pool: continue 
+                
+                player = random.choice(attacker_pool)
+                keeper = defending_team_obj.get_starting_goalkeeper()
 
                 sub_event = random.random()
                 if sub_event < 0.6: # Chance
@@ -127,7 +140,7 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
                     streak = 1.2 if getattr(player, 'match_streak', 0) >= 3 else 1.0
                     if random.random() < (player.ovr / 180) * luck * streak:
                         if is_user_involved: console.print(f"{minute}' [bold red]{random.choice(COMMENTARY['GOAL']).format(player=player.name)}[/bold red]")
-                        if attacking_team == home_team: home_goals += 1
+                        if attacking_team_obj == home_team: home_goals += 1
                         else: away_goals += 1
                         player.season_goals += 1
                         player.match_streak = getattr(player, 'match_streak', 0) + 1
@@ -136,6 +149,13 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
                 elif sub_event < 0.1: # Injury
                     if is_user_involved: console.print(f"{minute}' [bold red]INJURY! {player.name} is down![/bold red]")
                     player.injury_days = random.randint(5, 20)
+                    # Remove from eligible list for remainder of match
+                    if player in attacker_pool: attacker_pool.remove(player)
+                elif sub_event < 0.15: # Red Card check (rare inside foul logic)
+                     if random.random() < 0.05: # 5% chance if foul event triggers (simplified here)
+                        if is_user_involved: console.print(f"{minute}' [bold red]RED CARD! {player.name} is sent off![/bold red]")
+                        player.is_banned = True
+                        if player in attacker_pool: attacker_pool.remove(player)
 
     if is_user_involved:
         console.print(f"[bold red]Full Time: {home_team.name} {home_goals} - {away_goals} {away_team.name}[/bold red]")
@@ -161,3 +181,25 @@ def reset_player_season_stats(teams):
     for team in teams:
         for player in team.players:
             player.season_goals = 0; player.season_clean_sheets = 0
+
+def process_post_match_recovery(team):
+    """
+    Handles recovery for players who missed the match.
+    - Decrements injury days.
+    - Decrements ban duration (simplified to 1 match ban reset if banned).
+    """
+    for player in team.players:
+        if player.injury_days > 0:
+            player.injury_days -= 1
+        
+        # Simplified Ban Logic: If banned, assume they served it this match (if they didn't play).
+        # In a real game, we'd check if they were in the lineup. Since simulate_match filters them out,
+        # we assume any banned player missed the match and thus served their ban.
+        # But we must be careful not to unban someone who JUST got banned in this match.
+        # We need a 'ban_duration' attribute ideally. For now, we'll leave bans manual or 1-match.
+        # Let's assume bans last 1 match week.
+        if player.is_banned:
+             # To distinguish newly banned vs served ban, we might need a counter.
+             # For simplicity in this version: 50% chance ban is lifted (1-2 match ban).
+             if random.random() > 0.5:
+                 player.is_banned = False
