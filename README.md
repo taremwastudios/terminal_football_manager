@@ -8,7 +8,15 @@ An offline terminal football manager game played directly in your terminal, enha
 Make sure you have **Python 3.8+** installed on your system.
 
 ### 2. Setup & Installation
-It is recommended to use a virtual environment to avoid conflicts:
+
+**Option A: Instant Play (via PyPI)**
+You can install the latest version directly from PyPI:
+```bash
+pip install terminal-football-manager
+```
+
+**Option B: From Source (for Developers)**
+It is recommended to use a virtual environment:
 
 ```bash
 # Create a virtual environment
@@ -25,8 +33,12 @@ pip install .
 ```
 
 ### 3. Start the Game
-Once the environment is active, run the game using:
+If you installed via PyPI, simply run:
+```bash
+terminal-football-manager
+```
 
+Alternatively, if running from source:
 ```bash
 python -m terminal_football_manager.main
 ```

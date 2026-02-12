@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "terminal-football-manager"
-version = "0.1.32"
+version = "0.1.34"
 authors = [
   { name="TaremwaStudios", email="author@example.com" },
 ]
@@ -19,6 +19,9 @@ classifiers = [
 dependencies = [
     "rich",
 ]
+
+[project.scripts]
+terminal-football-manager = "terminal_football_manager.main:main"
 
 [project.urls]
 "Homepage" = "https://github.com/TaremwaStudios/TaremwaStudios"
