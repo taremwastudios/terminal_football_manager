@@ -221,10 +221,40 @@ def run_transfer_market(fut_club):
                     console.print("[bold red]Invalid bid or insufficient funds.[/bold red]")
 
         elif choice == '2':
-            # List player logic
-            pass
-        elif choice == '4':
+            if not fut_club.players:
+                console.print("[yellow]No players to list.[/yellow]")
+                continue
+            
+            console.print("\n[bold blue]--- List a Player ---[/bold blue]")
+            for i, p in enumerate(fut_club.players[:15]):
+                console.print(f"[{i+1}] {p.name} (OVR: {p.ovr}, Value: €{p.market_value:,})")
+            
+            p_idx = int(console.input("Select player to list (or 0): ")) - 1
+            if p_idx >= 0:
+                player = fut_club.players[p_idx]
+                start_bid = int(console.input(f"Enter starting bid (Value €{player.market_value:,}): "))
+                duration_hrs = int(console.input("Enter duration (24, 48, or 72 hours): "))
+                duration_hrs = max(24, min(72, duration_hrs))
+                
+                end_time = datetime.now() + timedelta(hours=duration_hrs)
+                new_auc = Auction(player, "YOU", start_bid, end_time)
+                fut_club.transfer_market.append(new_auc)
+                fut_club.players.remove(player)
+                console.print(f"[bold green]{player.name} is now on the market![/bold green]")
+
+        elif choice == '3':
+            active_bids = [a for a in fut_club.transfer_market if a.highest_bidder == "YOU"]
+            if not active_bids:
+                console.print("[yellow]You have no active winning bids.[/yellow]")
+            for a in active_bids:
+                console.print(f"WINNING: {a.player.name} - Current: €{a.current_bid:,}")
+
+        elif choice == '5':
+            save_game("FUT", fut_club.to_dict())
             break
+        
+        # Periodic Market Update
+        simulate_market_activity(fut_club)
 
     def add_player(self, player):
         self.players.append(player)
