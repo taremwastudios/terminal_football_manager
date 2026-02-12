@@ -3,6 +3,8 @@ import json
 import os
 from .constants import *
 
+from .persistence import save_game, load_game
+
 class HeroPlayer:
     """Represents the user's single player in Hero Mode."""
     def __init__(self, name, position, age, ovr, attributes, country, team_name=None, career_season_count=1):
@@ -129,54 +131,35 @@ def simulate_player_performance(hero_player):
     hero_player.career_goals += goals
     return goals
 
-def save_player_career(hero_player, filename="player_career_save.json"):
-    try:
-        data = hero_player.to_dict()
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
-        print(f"\nPlayer career saved successfully to {filename}")
-    except Exception as e:
-        print(f"\nError saving player career: {e}")
-
-def load_player_career(filename="player_career_save.json"):
-    try:
-        if not os.path.exists(filename):
-            print(f"No player career save file found at {filename}. Starting new career.")
-            return None
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        print(f"\nPlayer career loaded successfully from {filename}")
-        return HeroPlayer.from_dict(data)
-    except Exception as e:
-        print(f"\nError loading player career: {e}. Starting new career.")
-        return None
-
-def run_player_career_mode():
+def run_player_career_mode(hero_player=None):
     print("\n--- Welcome to Player Career Mode ---")
-    hero_player = None
     career_season_count = 1
 
-    while hero_player is None:
-        print("\n1. Start New Career")
-        print("2. Load Career")
-        print("3. Back to Main Menu")
-        choice = input("Enter your choice: ")
+    if hero_player is None:
+        while hero_player is None:
+            print("\n1. Start New Career")
+            print("2. Load Career")
+            print("3. Back to Main Menu")
+            choice = input("Enter your choice: ")
 
-        if choice == '1':
-            hero_player = generate_hero_player()
-            print(f"\nYour career begins! {hero_player}")
-        elif choice == '2':
-            loaded_player = load_player_career()
-            if loaded_player:
-                hero_player = loaded_player
-                career_season_count = hero_player.career_season_count
-                print(f"\nCareer loaded: {hero_player}")
+            if choice == '1':
+                hero_player = generate_hero_player()
+                print(f"\nYour career begins! {hero_player}")
+            elif choice == '2':
+                mode, loaded_state = load_game()
+                if mode == "Player Career" and loaded_state:
+                    hero_player = HeroPlayer.from_dict(loaded_state)
+                    career_season_count = hero_player.career_season_count
+                    print(f"\nCareer loaded: {hero_player}")
+                else:
+                    print("No Player Career save found in unified save file.")
+            elif choice == '3':
+                return # Go back to main menu
             else:
-                print("Failed to load career. Please try again or start a new one.")
-        elif choice == '3':
-            return # Go back to main menu
-        else:
-            print("Invalid choice.")
+                print("Invalid choice.")
+    else:
+        career_season_count = hero_player.career_season_count
+        print(f"\nContinuing career: {hero_player}")
 
     while True: # Main career loop
         print(f"\n--- Season {career_season_count} ---")
@@ -246,7 +229,7 @@ def run_player_career_mode():
             elif action_choice == '4':
                 break # Exit action menu, continue to next season
             elif action_choice == '5':
-                save_player_career(hero_player)
+                save_game("Player Career", hero_player.to_dict())
             elif action_choice == '6':
                 print("Exiting Player Career Mode.")
                 return # Go back to main menu

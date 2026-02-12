@@ -9,10 +9,10 @@ from rich.panel import Panel
 console = Console()
 
 from .constants import COUNTRIES, NATIONAL_FIRST_NAMES, NATIONAL_LAST_NAMES, FIRST_NAMES, LAST_NAMES, ATTRIBUTE_WEIGHTS, POSITIONS, TRAINER_TIERS
+from .persistence import save_game, load_game
 from .models import Player, Team
-from .player_career import run_player_career_mode
-from .fut_mode import run_fut_mode
-from .game_logic import League, generate_fixtures, assign_goal_scorers, simulate_match, reset_all_team_stats, reset_player_season_stats, simulate_competition_group_stage, simulate_competition_knockout_stage, simulate_international_tournament, simulate_knockout_cup, simulate_home_away_cup, generate_sponsorship_offer, calculate_merchandise_revenue, generate_national_team_squad, simulate_world_cup, AWARD_PRIZES, NATIONAL_TEAM_NAMES
+from .player_career import run_player_career_mode, HeroPlayer
+from .fut_mode import run_fut_mode, FutClub
 
 # --- Data Structures ---
 
@@ -51,9 +51,14 @@ def generate_player(is_youth=False, min_ovr=None, max_ovr=None, position=None, c
         attributes[attr] = max(10, min(attributes[attr], 130)) # Cap attributes, allowing high values for strong players
     ovr = int(sum(attributes.values()) / len(attributes))
 
+    # Robust Scouting: Assign potential
+    potential = random.randint(ovr + 5, min(150, ovr + 30))
+    if is_youth and random.random() < 0.1: # 10% chance for a youth wonderkid
+        potential = random.randint(130, 160)
+
     player_country = random.choice(country_pool) if country_pool else random.choice(COUNTRIES)
 
-    return Player(generate_player_name(player_country), position, age, ovr, attributes, player_country)
+    return Player(generate_player_name(player_country), position, age, ovr, attributes, player_country, potential=potential)
 
 def create_teams():
     all_club_teams = []
@@ -270,10 +275,19 @@ def run_off_season_training(all_teams, user_team_ref):
                 continue 
 
             ovr_change = 0
-            if player.age < 24: ovr_change = random.randint(1, 3)
-            elif 24 <= player.age <= 29: ovr_change = random.randint(0, 1)
-            elif 30 <= player.age <= 32: ovr_change = random.randint(-1, 0)
-            else: ovr_change = random.randint(-3, -1)
+            if player.age < 24:
+                # Young players grow towards their potential
+                growth_room = player.potential - player.ovr
+                if growth_room > 0:
+                    ovr_change = random.randint(1, min(5, max(1, growth_room // 5)))
+                else:
+                    ovr_change = random.randint(0, 1)
+            elif 24 <= player.age <= 29:
+                ovr_change = random.randint(0, 1)
+            elif 30 <= player.age <= 32:
+                ovr_change = random.randint(-1, 0)
+            else:
+                ovr_change = random.randint(-3, -1)
             
             if player.trainer_level > 0:
                 tier_name = list(TRAINER_TIERS.keys())[player.trainer_level - 1]
@@ -306,10 +320,18 @@ def run_off_season_training(all_teams, user_team_ref):
                 continue
 
             ovr_change = 0
-            if player.age < 24: ovr_change = random.randint(1, 3)
-            elif 24 <= player.age <= 29: ovr_change = random.randint(0, 1)
-            elif 30 <= player.age <= 32: ovr_change = random.randint(-1, 0)
-            else: ovr_change = random.randint(-3, -1)
+            if player.age < 24:
+                growth_room = player.potential - player.ovr
+                if growth_room > 0:
+                    ovr_change = random.randint(1, min(5, max(1, growth_room // 4)))
+                else:
+                    ovr_change = random.randint(0, 1)
+            elif 24 <= player.age <= 29:
+                ovr_change = random.randint(0, 1)
+            elif 30 <= player.age <= 32:
+                ovr_change = random.randint(-1, 0)
+            else:
+                ovr_change = random.randint(-3, -1)
             
             player.ovr = max(10, player.ovr + ovr_change)
 
@@ -653,35 +675,14 @@ def run_transfer_window(league_teams, user_team, window_name, all_club_teams): #
     console.print(f"\n[bold blue]--- {window_name} Transfer Window is CLOSED ---[/bold blue]")
 
 
-def save_game(game_state, filename="football_manager_save.json"):
-    try:
-        with open(filename, 'w') as f:
-            json.dump(game_state, f, indent=4)
-        console.print(f"\n[bold green]Game saved successfully to {filename}[/bold green]")
-    except Exception as e:
-        console.print(f"\n[bold red]Error saving game: {e}[/bold red]")
-
-def load_game(filename="football_manager_save.json"):
-    try:
-        if not os.path.exists(filename):
-            console.print(f"[bold yellow]No save file found at {filename}. Starting new game.[/bold yellow]")
-            return None
-        with open(filename, 'r') as f:
-            game_state = json.load(f)
-        console.print(f"\n[bold green]Game loaded successfully from {filename}[/bold green]")
-        return game_state
-    except Exception as e:
-        console.print(f"\n[bold red]Error loading game: {e}. Starting new game.[/bold red]")
-        return None
-
-def serialize_game_state(all_club_teams, user_team_name, season_count):
+def serialize_manager_state(all_club_teams, user_team_name, season_count):
     return {
         "all_club_teams": [t.to_dict() for t in all_club_teams],
         "user_team_name": user_team_name,
         "season_count": season_count
     }
 
-def deserialize_game_state(data):
+def deserialize_manager_state(data):
     all_teams_map = {}
     all_club_teams = []
     for t_data in data["all_club_teams"]:
@@ -700,9 +701,8 @@ def deserialize_game_state(data):
     season_count = data["season_count"]
     
     # Reconstruct league_teams and playoff_teams based on current user_team's league
-    # This definition of league_teams and playoff_teams is specific to the user's current league
     league_teams = [t for t in all_club_teams if t.league == user_team.league and t.league != "Domestic Playoff"]
-    playoff_teams = [t for t in all_club_teams if t.league == "Domestic Playoff"] # Playoff teams are constant for domestic
+    playoff_teams = [t for t in all_club_teams if t.league == "Domestic Playoff"]
 
     return all_club_teams, league_teams, playoff_teams, user_team, season_count
 
@@ -1167,16 +1167,26 @@ def main():
             break
 
         elif main_choice == '2':
-            loaded_state = load_game()
+            mode, loaded_state = load_game()
             if loaded_state:
-                all_club_teams, league_teams, playoff_teams, user_team, season_count = deserialize_game_state(loaded_state)
-                break
+                if mode == "Manager Mode":
+                    all_club_teams, league_teams, playoff_teams, user_team, season_count = deserialize_manager_state(loaded_state)
+                    break
+                elif mode == "Player Career":
+                    hero_player = HeroPlayer.from_dict(loaded_state)
+                    run_player_career_mode(hero_player)
+                    all_club_teams, league_teams, playoff_teams, user_team, season_count = [], [], [], None, 1
+                    continue
+                elif mode == "FUT":
+                    fut_club = FutClub.from_dict(loaded_state)
+                    run_fut_mode(fut_club)
+                    all_club_teams, league_teams, playoff_teams, user_team, season_count = [], [], [], None, 1
+                    continue
             else:
+                console.print("[yellow]No save file found or incompatible format.[/yellow]")
                 continue 
         elif main_choice == '3':
             run_player_career_mode()
-            # After player career mode exits, return to main menu of the main game
-            # This allows starting manager mode or loading after finishing player career
             all_club_teams, league_teams, playoff_teams, user_team, season_count = [], [], [], None, 1 # Reset state
             continue # Loop back to main menu
         elif main_choice == '4':
@@ -1206,8 +1216,8 @@ def main():
 
         save_choice = console.input("\n[bold yellow]Do you want to save your game? (yes/no):[/bold yellow] ").lower()
         if save_choice == 'yes':
-            game_state_to_save = serialize_game_state(all_club_teams, user_team.name, season_count) # Save all_club_teams and user_team name
-            save_game(game_state_to_save)
+            game_state_to_save = serialize_manager_state(all_club_teams, user_team.name, season_count)
+            save_game("Manager Mode", game_state_to_save)
 
         while True:
             another_season = console.input("\n[bold yellow]Play another season? (yes/no):[/bold yellow] ").lower()

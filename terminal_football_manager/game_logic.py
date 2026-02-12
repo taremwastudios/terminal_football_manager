@@ -91,20 +91,42 @@ def assign_goal_scorers(team, goals):
         if possible_scorers:
             random.choice(possible_scorers).season_goals += 1
 
+import time
+
 def simulate_match(home_team, away_team, is_international_match=False, user_team_ref=None):
     # Handle BYE teams (None) gracefully
     if home_team is None or away_team is None:
         return 0, 0 # No goals scored, no stats updated for a bye
 
+    is_user_involved = user_team_ref and (home_team == user_team_ref or away_team == user_team_ref)
+
     if not is_international_match: 
         attendance = int(home_team.stadium_capacity * random.uniform(0.65, 1.0))
         revenue = attendance * 100 # Multiplied by 5x current value (20*5) for enhanced stadium revenue
         home_team.budget += revenue
-        if user_team_ref and home_team == user_team_ref: # Only print revenue for user's team if user_team_ref is provided
+        if is_user_involved and home_team == user_team_ref:
             console.print(f"[REVENUE] [green]{home_team.name}[/green] earned [yellow]€{revenue:,}[/yellow] from {attendance:,} fans.")
 
     home_ovr = home_team.get_team_ovr()
     away_ovr = away_team.get_team_ovr()
+
+    # Commentary setup
+    commentary_events = [
+        "Kickoff! The match is underway.",
+        f"A fierce battle in the midfield between {home_team.name} and {away_team.name}.",
+        "Great defensive play by the backline.",
+        "A dangerous cross into the box!",
+        "The goalkeeper makes a stunning save!",
+        "A tactical shift from the manager.",
+        "The crowd is going wild!",
+        "A yellow card is shown for a reckless challenge."
+    ]
+
+    if is_user_involved:
+        console.print(f"\n[bold green]{home_team.name} vs {away_team.name}[/bold green]")
+        for _ in range(3):
+            console.print(f"[italic]{random.choice(commentary_events)}[/italic]")
+            time.sleep(0.5)
 
     home_goals = random.randint(0, 2) 
     away_goals = random.randint(0, 2) 
@@ -153,6 +175,9 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
     else:
         home_team.draws += 1; home_team.points += 1
         away_team.draws += 1; away_team.points += 1
+    
+    if is_user_involved:
+        console.print(f"[bold red]Full Time: {home_team.name} {home_goals} - {away_goals} {away_team.name}[/bold red]")
     
     return home_goals, away_goals
 
@@ -458,6 +483,8 @@ def simulate_competition_knockout_stage(qualifiers, competition_name, prize_stru
 
     if winner:
         console.print(f"\n[bold green]--- {competition_name} Winner: {winner.name} ---[/bold green]")
+        if hasattr(winner, 'trophies'):
+            winner.trophies.append(competition_name)
     else:
         console.print(f"\n[bold red]--- No clear winner for {competition_name} ---[/bold red]")
         return # Exit if no winner was determined
@@ -564,6 +591,8 @@ def simulate_knockout_cup(participants, cup_name, prize_structure, user_team_ref
 
     winner = current_round_teams[0]
     console.print(f"\n[bold green]--- {cup_name} Winner: {winner.name} ---[/bold green]")
+    if hasattr(winner, 'trophies'):
+        winner.trophies.append(cup_name)
     if user_sim_team == winner:
         user_team_ref.budget += prize_structure.get("winner", 0)
         console.print(f"[bold green]Congratulations! {user_team_ref.name} wins {cup_name} and awarded €{prize_structure.get('winner', 0):,}![/bold green]")
@@ -642,6 +671,8 @@ def simulate_home_away_cup(participants, cup_name, prize_structure, user_team_re
 
     winner = current_round_teams[0]
     console.print(f"\n[bold green]--- {cup_name} Winner: {winner.name} ---[/bold green]")
+    if hasattr(winner, 'trophies'):
+        winner.trophies.append(cup_name)
     if user_sim_team == winner:
         user_team_ref.budget += prize_structure.get("winner", 0)
         console.print(f"[bold green]Congratulations! {user_team_ref.name} wins {cup_name} and awarded €{prize_structure.get('winner', 0):,}![/bold green]")

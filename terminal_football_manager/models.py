@@ -3,11 +3,12 @@ from .constants import COUNTRIES, POSITIONS, TRAINER_TIERS, ATTRIBUTE_WEIGHTS
 
 class Player:
     """Represents a single player with attributes and an overall rating."""
-    def __init__(self, name, position, age, ovr, attributes, country=None):
+    def __init__(self, name, position, age, ovr, attributes, country=None, potential=None):
         self.name = name
         self.position = position
         self.age = age
         self.ovr = ovr
+        self.potential = potential if potential else min(150, ovr + random.randint(5, 25))
         self.attributes = attributes
         self.country = country if country else random.choice(COUNTRIES)
         self.trainer_level = 0 
@@ -38,7 +39,7 @@ class Player:
             tier_names = list(TRAINER_TIERS.keys())
             if self.trainer_level <= len(tier_names):
                 trainer_str = f", Trainer: {tier_names[self.trainer_level-1]}"
-        return f"Player({self.name}, {self.age}, {self.position}, OVR: {self.ovr}, Value: €{self.market_value:,}, Salary: €{self.salary:,}, Country: {self.country}{trainer_str})"
+        return f"Player({self.name}, {self.age}, {self.position}, OVR: {self.ovr}, Potential: {self.potential}, Value: €{self.market_value:,}, Salary: €{self.salary:,}, Country: {self.country}{trainer_str})"
 
     def to_dict(self):
         return {
@@ -46,6 +47,7 @@ class Player:
             "position": self.position,
             "age": self.age,
             "ovr": self.ovr,
+            "potential": self.potential,
             "attributes": self.attributes,
             "country": self.country,
             "trainer_level": self.trainer_level,
@@ -62,7 +64,8 @@ class Player:
             data["age"],
             data["ovr"],
             data["attributes"],
-            data["country"]
+            data["country"],
+            data.get("potential")
         )
         player.trainer_level = data["trainer_level"]
         player.season_goals = data["season_goals"]
@@ -88,6 +91,7 @@ class Team:
         self.goals_for = 0
         self.goals_against = 0
         self.league = league # Store league affiliation
+        self.trophies = [] # List of trophies won
 
     @property
     def stadium_capacity(self):
@@ -130,7 +134,7 @@ class Team:
         return max(goalkeepers, key=lambda p: p.ovr)
 
     def __repr__(self):
-        return f"Team({self.name}, OVR: {self.get_team_ovr():.2f}, Budget: €{self.budget:,}, League: {self.league})"
+        return f"Team({self.name}, OVR: {self.get_team_ovr():.2f}, Budget: €{self.budget:,}, League: {self.league}, Trophies: {len(self.trophies)})"
 
     def to_dict(self):
         return {
@@ -147,7 +151,8 @@ class Team:
             "losses": self.losses,
             "goals_for": self.goals_for,
             "goals_against": self.goals_against,
-            "league": self.league # Save league affiliation
+            "league": self.league, # Save league affiliation
+            "trophies": self.trophies
         }
 
     @classmethod
@@ -163,6 +168,7 @@ class Team:
         team.losses = data["losses"]
         team.goals_for = data["goals_for"]
         team.goals_against = data["goals_against"]
+        team.trophies = data.get("trophies", [])
         
         # Players are reconstructed but their 'team' attribute is set by deserialize_game_state
         for p_data in data["players"]:
@@ -177,6 +183,7 @@ class Team:
         new_team.budget = self.budget
         new_team.stadium_level = self.stadium_level
         new_team.academy_level = self.academy_level
+        new_team.trophies = list(self.trophies)
         # Reset stats for the copy as it's for a new competition
         new_team.points = 0
         new_team.games_played = 0

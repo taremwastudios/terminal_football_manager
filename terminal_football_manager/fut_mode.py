@@ -11,12 +11,30 @@ from .game_logic import League, generate_fixtures, assign_goal_scorers, simulate
 
 console = Console()
 
+from .persistence import save_game, load_game
+
 class FutClub:
     def __init__(self, name, budget):
         self.name = name
         self.budget = budget
         self.players = []
         self.stadiums = []
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "budget": self.budget,
+            "players": [p.to_dict() for p in self.players],
+            "stadiums": self.stadiums
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        club = cls(data["name"], data["budget"])
+        club.stadiums = data.get("stadiums", [])
+        for p_data in data["players"]:
+            club.players.append(Player.from_dict(p_data))
+        return club
 
     def add_player(self, player):
         self.players.append(player)
@@ -436,58 +454,61 @@ def run_champions_league_challenge(fut_club):
     console.input("\n[bold green]Press Enter to return to FUT Mode...[/bold green]")
 
 
-def run_fut_mode():
+def run_fut_mode(fut_club=None):
     console.print(Panel("[bold magenta]Welcome to FUT Central![/bold magenta]",
                         title="[bold yellow]FUT MODE[/bold yellow]", border_style="blue"))
 
-    # Home Team Selection
-    chosen_club_name = None
-    while chosen_club_name is None:
-        console.print("\n[bold blue]--- Choose Your Home Club for FUT ---[/bold blue]")
-        for i, club_name in enumerate(BIG_CLUBS_FUT_START):
-            console.print(f"[{i+1}] [cyan]{club_name}[/cyan]")
-        
-        choice = console.input("[bold yellow]Enter the number of your chosen club:[/bold yellow] ")
-        try:
-            choice_idx = int(choice) - 1
-            if 0 <= choice_idx < len(BIG_CLUBS_FUT_START):
-                chosen_club_name = BIG_CLUBS_FUT_START[choice_idx]
-            else:
-                console.print("[red]Invalid choice. Please select a number from the list.[/red]")
-        except ValueError:
-            console.print("[red]Invalid input. Please enter a number.[/red]")
+    if fut_club is None:
+        # Home Team Selection
+        chosen_club_name = None
+        while chosen_club_name is None:
+            console.print("\n[bold blue]--- Choose Your Home Club for FUT ---[/bold blue]")
+            for i, club_name in enumerate(BIG_CLUBS_FUT_START):
+                console.print(f"[{i+1}] [cyan]{club_name}[/cyan]")
+            
+            choice = console.input("[bold yellow]Enter the number of your chosen club:[/bold yellow] ")
+            try:
+                choice_idx = int(choice) - 1
+                if 0 <= choice_idx < len(BIG_CLUBS_FUT_START):
+                    chosen_club_name = BIG_CLUBS_FUT_START[choice_idx]
+                else:
+                    console.print("[red]Invalid choice. Please select a number from the list.[/red]")
+            except ValueError:
+                console.print("[red]Invalid input. Please enter a number.[/red]")
 
-    fut_club = FutClub(chosen_club_name + " FUT", 50_000_000) # Starting budget for FUT
+        fut_club = FutClub(chosen_club_name + " FUT", 50_000_000) # Starting budget for FUT
 
-    # Populate initial squad with players from chosen club, with low OVRs
-    players_for_initial_squad = [p for p in CHAMPIONS_LEAGUE_TEAMS_DATA if p["name"] == chosen_club_name]
-    if players_for_initial_squad:
-        for fut_player_data_entry in players_for_initial_squad[0]["players"]:
-            # Generate player with OVR between 70-90
-            target_ovr = random.randint(70, 90)
-            # Make a copy of the fut_player_data_entry and modify its base_ovr for generation
-            temp_fut_player_data = FUTPlayer(
-                name=fut_player_data_entry.name,
-                position=fut_player_data_entry.position,
-                age=random.randint(20,28), # Adjust age for initial squad
-                base_ovr=target_ovr,
-                country=fut_player_data_entry.country,
-                card_type="Common" # Initial cards are common
-            )
-            player = _generate_player_from_fut_data(temp_fut_player_data, target_ovr=target_ovr)
-            fut_club.add_player(player)
-        console.print(Panel(f"[bold green]Your initial FUT squad for {chosen_club_name} FUT has been generated![/bold green]", title="[bold yellow]Squad Ready![/bold yellow]", border_style="green"))
+        # Populate initial squad with players from chosen club, with low OVRs
+        players_for_initial_squad = [p for p in CHAMPIONS_LEAGUE_TEAMS_DATA if p["name"] == chosen_club_name]
+        if players_for_initial_squad:
+            for fut_player_data_entry in players_for_initial_squad[0]["players"]:
+                # Generate player with OVR between 70-90
+                target_ovr = random.randint(70, 90)
+                # Make a copy of the fut_player_data_entry and modify its base_ovr for generation
+                temp_fut_player_data = FUTPlayer(
+                    name=fut_player_data_entry.name,
+                    position=fut_player_data_entry.position,
+                    age=random.randint(20,28), # Adjust age for initial squad
+                    base_ovr=target_ovr,
+                    country=fut_player_data_entry.country,
+                    card_type="Common" # Initial cards are common
+                )
+                player = _generate_player_from_fut_data(temp_fut_player_data, target_ovr=target_ovr)
+                fut_club.add_player(player)
+            console.print(Panel(f"[bold green]Your initial FUT squad for {chosen_club_name} FUT has been generated![/bold green]", title="[bold yellow]Squad Ready![/bold yellow]", border_style="green"))
+        else:
+            console.print("[red]Could not find player data for the chosen club. Your squad may be empty.[/red]")
+
+        # Simplified Formation Selection (Placeholder for now)
+        console.print("\n[bold blue]--- Choose Your Formation ---[/bold blue]")
+        console.print("1. 4-3-3 Attacking")
+        console.print("2. 4-4-2 Flat")
+        console.print("3. 3-5-2")
+        formation_choice = console.input("[bold yellow]Enter your preferred formation (e.g., 1):[/bold yellow] ")
+        # For now, just acknowledge the choice. Actual formation logic can be added later.
+        console.print(f"You have chosen formation: {formation_choice}. This will be implemented in future updates.")
     else:
-        console.print("[red]Could not find player data for the chosen club. Your squad may be empty.[/red]")
-
-    # Simplified Formation Selection (Placeholder for now)
-    console.print("\n[bold blue]--- Choose Your Formation ---[/bold blue]")
-    console.print("1. 4-3-3 Attacking")
-    console.print("2. 4-4-2 Flat")
-    console.print("3. 3-5-2")
-    formation_choice = console.input("[bold yellow]Enter your preferred formation (e.g., 1):[/bold yellow] ")
-    # For now, just acknowledge the choice. Actual formation logic can be added later.
-    console.print(f"You have chosen formation: {formation_choice}. This will be implemented in future updates.")
+        console.print(f"[bold green]Welcome back to {fut_club.name}![/bold green]")
 
 
     while True:
@@ -498,7 +519,8 @@ def run_fut_mode():
         console.print("3. View My Squad")
         console.print("4. View My Stadiums")
         console.print("5. Champions League Challenge")
-        console.print("6. Exit FUT Mode")
+        console.print("6. Save FUT Club")
+        console.print("7. Exit FUT Mode")
         
         choice = console.input("[bold yellow]Enter your choice:[/bold yellow] ")
 
@@ -555,7 +577,10 @@ def run_fut_mode():
         elif choice == '5': # Champions League Challenge
             run_champions_league_challenge(fut_club)
 
-        elif choice == '6': # Exit FUT Mode
+        elif choice == '6': # Save FUT Club
+            save_game("FUT", fut_club.to_dict())
+
+        elif choice == '7': # Exit FUT Mode
             console.print("[bold green]Exiting FUT Mode. Good luck with your club![/bold green]")
             break
         else:
