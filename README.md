@@ -7,15 +7,25 @@ An offline terminal football manager game played directly in your terminal, enha
 ### 1. Prerequisites
 Make sure you have **Python 3.8+** installed on your system.
 
-### 2. Installation
-You can install the game and its dependencies directly from the source:
+### 2. Setup & Installation
+It is recommended to use a virtual environment to avoid conflicts:
 
 ```bash
+# Create a virtual environment
+python3 -m venv venv
+
+# Activate it
+# On Linux/macOS:
+source venv/bin/activate
+# On Windows:
+# venv\Scripts\activate
+
+# Install the game and dependencies
 pip install .
 ```
 
 ### 3. Start the Game
-Once installed, run the game using:
+Once the environment is active, run the game using:
 
 ```bash
 python -m terminal_football_manager.main
