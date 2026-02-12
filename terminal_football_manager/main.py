@@ -907,6 +907,33 @@ def run_season(all_club_teams, league_teams, playoff_teams, user_team, season_nu
             home_goals, away_goals = simulate_match(home, away, user_team_ref=user_team)
             if home == user_team or away == user_team: # Only print result if user's team is involved
                 console.print(f"[cyan]{home.name}[/cyan] [bold red]{home_goals}[/bold red] - [bold red]{away_goals}[/bold red] [cyan]{away.name}[/cyan]")
+                
+                # Social Media Feed after user match
+                user_win = (home == user_team and home_goals > away_goals) or (away == user_team and away_goals > home_goals)
+                user_draw = (home_goals == away_goals)
+                
+                tweets = []
+                if user_win:
+                    tweets = [
+                        f"@Fanatic: What a win! {user_team.name} are cooking! 🔥",
+                        f"@StatsGuru: {user_team.name} haven't played this well in years. Tactical masterclass.",
+                        f"@LocalNews: Manager's reputation is skyrocketing after today! #Legend"
+                    ]
+                    user_team.reputation = min(100, user_team.reputation + 2)
+                elif user_draw:
+                    tweets = [
+                        f"@Neutral: Fair result. Both teams looked tired.",
+                        f"@AngryFan: Should have won that. Two points dropped! 😡"
+                    ]
+                else:
+                    tweets = [
+                        f"@TrollFootball: {user_team.name} are officially a banter club. 😂",
+                        f"@Pundit: I don't see how the manager survives this. Dreadful.",
+                        f"@Frustrated: #ManagerOut. Enough is enough."
+                    ]
+                    user_team.reputation = max(0, user_team.reputation - 2)
+                
+                console.print(Panel("\n".join(random.sample(tweets, 2)), title="[bold blue]Social Media Feed[/bold blue]", border_style="cyan"))
             
         main_league.update_table()
         main_league.print_table()
@@ -1156,20 +1183,34 @@ def main():
             
             domestic_teams_for_selection = [t for t in all_club_teams if t.league == "Domestic League"]
             console.print("\n[bold blue]To begin your managerial career, please select a team:[/bold blue]")
+            console.print("[italic yellow]Note: Elite clubs (OVR > 90) are LOCKED until your Reputation grows![/italic yellow]")
+            
             sorted_teams = sorted(domestic_teams_for_selection, key=lambda t: t.name)
+            manager_reputation = 20 # Starting reputation for a new manager
+
             for i, team in enumerate(sorted_teams):
-                console.print(f"[{i + 1}] [cyan]{team.name}[/cyan] (Avg. OVR: [green]{team.get_team_ovr():.2f}[/green]) - Budget: [yellow]€{team.budget:,}[/yellow], Squad Value: [yellow]€{team.total_squad_value:,}[/yellow], Weekly Wage: [red]€{team.total_wage_bill:,}[/red])")
+                ovr = team.get_team_ovr()
+                status = "[green]AVAILABLE[/green]"
+                if ovr > 90 and manager_reputation < 70:
+                    status = "[bold red]LOCKED (Reputation 70 Required)[/bold red]"
+                
+                console.print(f"[{i + 1}] [cyan]{team.name}[/cyan] (OVR: [green]{ovr:.1f}[/green]) - {status}")
             
             while not user_team:
                 try:
-                    choice = int(console.input("[bold yellow]Enter the number of your team:[/bold yellow] "))
+                    choice = int(console.input("[bold yellow]Enter choice: [/bold yellow] "))
                     if 1 <= choice <= len(sorted_teams):
-                        user_team = sorted_teams[choice - 1]
-                        console.print(f"\n[bold green]You have chosen to manage {user_team.name}.[/bold green]\n")
+                        selected = sorted_teams[choice - 1]
+                        if selected.get_team_ovr() > 90 and manager_reputation < 70:
+                            console.print("[bold red]You are not famous enough to manage this club yet![/bold red]")
+                        else:
+                            user_team = selected
+                            user_team.reputation = manager_reputation
+                            console.print(f"\n[bold green]You have chosen to manage {user_team.name}.[/bold green]\n")
                     else:
-                        console.print("[red]Invalid number. Please try again.[/red]")
+                        console.print("[red]Invalid number.[/red]")
                 except ValueError:
-                    console.print("[red]Invalid input. Please enter a number.[/red]")
+                    console.print("[red]Invalid input.[/red]")
             
             # Initialize league_teams and playoff_teams based on user's selected domestic league
             league_teams = [t for t in all_club_teams if t.league == user_team.league and t.league != "Domestic Playoff"]

@@ -25,9 +25,9 @@ class FutClub:
         self.division = 10
         self.points = 0
         self.games_played_in_season = 0
-        self.next_match_time = None # Timestamp for real-time delay
-        self.transfer_list = [] # Players listed for sale
-        self.bids = [] # Active bids by the user
+        self.next_match_time = None 
+        self.transfer_market = [] # List of Auction objects
+        self.my_bids = [] # Tracks auctions the user has bid on
 
     def to_dict(self):
         return {
@@ -40,8 +40,8 @@ class FutClub:
             "points": self.points,
             "games_played_in_season": self.games_played_in_season,
             "next_match_time": self.next_match_time.isoformat() if self.next_match_time else None,
-            "transfer_list": self.transfer_list,
-            "bids": self.bids
+            "transfer_market": [a.to_dict() for a in self.transfer_market],
+            "my_bids": self.my_bids
         }
 
     @classmethod
@@ -54,11 +54,87 @@ class FutClub:
         club.games_played_in_season = data.get("games_played_in_season", 0)
         nxt_time = data.get("next_match_time")
         club.next_match_time = datetime.fromisoformat(nxt_time) if nxt_time else None
-        club.transfer_list = data.get("transfer_list", [])
-        club.bids = data.get("bids", [])
+        club.transfer_market = [Auction.from_dict(a) for a in data.get("transfer_market", [])]
+        club.my_bids = data.get("my_bids", [])
         for p_data in data["players"]:
             club.players.append(Player.from_dict(p_data))
         return club
+
+class Auction:
+    def __init__(self, player, seller_name, start_bid, end_time):
+        self.player = player
+        self.seller_name = seller_name
+        self.current_bid = start_bid
+        self.highest_bidder = None
+        self.end_time = end_time
+
+    def to_dict(self):
+        return {
+            "player": self.player.to_dict(),
+            "seller_name": self.seller_name,
+            "current_bid": self.current_bid,
+            "highest_bidder": self.highest_bidder,
+            "end_time": self.end_time.isoformat()
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            Player.from_dict(data["player"]),
+            data["seller_name"],
+            data["current_bid"],
+            datetime.fromisoformat(data["end_time"])
+        )
+
+def run_transfer_market(fut_club):
+    while True:
+        console.print("\n[bold blue]--- FUT Transfer Market ---[/bold blue]")
+        console.print(f"Your Budget: [green]€{fut_club.budget:,}[/green]")
+        console.print("1. Browse Auctions")
+        console.print("2. List a Player for Auction")
+        console.print("3. My Active Bids")
+        console.print("4. Back")
+        
+        choice = console.input("[bold yellow]Choice: [/bold yellow]")
+        
+        if choice == '1':
+            if not fut_club.transfer_market:
+                console.print("[yellow]No players currently on the market.[/yellow]")
+                continue
+            
+            table = Table(title="Live Auctions")
+            table.add_column("ID")
+            table.add_column("Player")
+            table.add_column("OVR")
+            table.add_column("Current Bid")
+            table.add_column("Time Left")
+            
+            now = datetime.now()
+            for i, auc in enumerate(fut_club.transfer_market):
+                time_left = auc.end_time - now
+                if time_left.total_seconds() > 0:
+                    table.add_row(str(i+1), auc.player.name, str(auc.player.ovr), f"€{auc.current_bid:,}", str(time_left).split('.')[0])
+            
+            console.print(table)
+            bid_choice = console.input("[bold yellow]Enter ID to bid (or 0): [/bold yellow]")
+            if bid_choice != '0':
+                idx = int(bid_choice) - 1
+                auc = fut_club.transfer_market[idx]
+                min_bid = int(auc.current_bid * 1.1)
+                bid_amount = int(console.input(f"Enter bid (Min €{min_bid:,}): "))
+                if bid_amount >= min_bid and fut_club.budget >= bid_amount:
+                    fut_club.budget -= bid_amount
+                    auc.current_bid = bid_amount
+                    auc.highest_bidder = "YOU"
+                    console.print("[bold green]Bid placed successfully![/bold green]")
+                else:
+                    console.print("[bold red]Invalid bid or insufficient funds.[/bold red]")
+
+        elif choice == '2':
+            # List player logic
+            pass
+        elif choice == '4':
+            break
 
     def add_player(self, player):
         self.players.append(player)
