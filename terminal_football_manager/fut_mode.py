@@ -260,6 +260,9 @@ def run_transfer_market(fut_club):
         self.players.append(player)
         player.team = self 
 
+    def add_budget(self, amount):
+        self.budget += amount
+
     def get_team_ovr(self):
         if not self.players:
             return 0
