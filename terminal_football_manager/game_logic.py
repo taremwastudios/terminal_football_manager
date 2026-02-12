@@ -90,6 +90,15 @@ def generate_fixtures(teams):
         teams_copy.insert(1, teams_copy.pop())
     return matchdays
 
+def assign_goal_scorers(team, goals):
+    # This is still used in some places (like international or non-minute simulations)
+    attackers = [p for p in team.players if p.position in ["CF", "SS", "RWF", "LWF"]]
+    midfielders = [p for p in team.players if p.position in ["AMF", "CMF"]]
+    possible_scorers = (attackers * 5) + (midfielders * 2) + team.players
+    for _ in range(goals):
+        if possible_scorers:
+            random.choice(possible_scorers).season_goals += 1
+
 def simulate_match(home_team, away_team, is_international_match=False, user_team_ref=None):
     if home_team is None or away_team is None:
         return 0, 0
@@ -109,7 +118,6 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
     home_eligible = [p for p in home_team.players if p.injury_days == 0 and not p.is_banned]
     away_eligible = [p for p in away_team.players if p.injury_days == 0 and not p.is_banned]
     
-    # Emergency fallback if everyone is injured/banned (highly unlikely)
     if not home_eligible: home_eligible = home_team.players
     if not away_eligible: away_eligible = away_team.players
 
@@ -126,8 +134,6 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
             if random.random() < 0.12: # Event chance
                 attacking_team_obj = home_team if random.random() < (home_ovr / (home_ovr + away_ovr)) else away_team
                 defending_team_obj = away_team if attacking_team_obj == home_team else home_team
-                
-                # Pick from eligible players only
                 attacker_pool = home_eligible if attacking_team_obj == home_team else away_eligible
                 if not attacker_pool: continue 
                 
@@ -149,10 +155,9 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
                 elif sub_event < 0.1: # Injury
                     if is_user_involved: console.print(f"{minute}' [bold red]INJURY! {player.name} is down![/bold red]")
                     player.injury_days = random.randint(5, 20)
-                    # Remove from eligible list for remainder of match
                     if player in attacker_pool: attacker_pool.remove(player)
-                elif sub_event < 0.15: # Red Card check (rare inside foul logic)
-                     if random.random() < 0.05: # 5% chance if foul event triggers (simplified here)
+                elif sub_event < 0.15: # Red Card
+                     if random.random() < 0.05:
                         if is_user_involved: console.print(f"{minute}' [bold red]RED CARD! {player.name} is sent off![/bold red]")
                         player.is_banned = True
                         if player in attacker_pool: attacker_pool.remove(player)
@@ -183,23 +188,41 @@ def reset_player_season_stats(teams):
             player.season_goals = 0; player.season_clean_sheets = 0
 
 def process_post_match_recovery(team):
-    """
-    Handles recovery for players who missed the match.
-    - Decrements injury days.
-    - Decrements ban duration (simplified to 1 match ban reset if banned).
-    """
     for player in team.players:
-        if player.injury_days > 0:
-            player.injury_days -= 1
-        
-        # Simplified Ban Logic: If banned, assume they served it this match (if they didn't play).
-        # In a real game, we'd check if they were in the lineup. Since simulate_match filters them out,
-        # we assume any banned player missed the match and thus served their ban.
-        # But we must be careful not to unban someone who JUST got banned in this match.
-        # We need a 'ban_duration' attribute ideally. For now, we'll leave bans manual or 1-match.
-        # Let's assume bans last 1 match week.
-        if player.is_banned:
-             # To distinguish newly banned vs served ban, we might need a counter.
-             # For simplicity in this version: 50% chance ban is lifted (1-2 match ban).
-             if random.random() > 0.5:
-                 player.is_banned = False
+        if player.injury_days > 0: player.injury_days -= 1
+        if player.is_banned and random.random() > 0.5: player.is_banned = False
+
+# Missing functions used in main.py
+def simulate_competition_group_stage(all_participants, competition_name, user_team_ref):
+    # (Simplified for now to prevent crashes)
+    return all_participants[:8]
+
+def simulate_competition_knockout_stage(qualifiers, competition_name, prize_structure, user_team_ref):
+    return qualifiers[0]
+
+def simulate_international_tournament(participants, name, prizes, user):
+    return participants[0]
+
+def simulate_knockout_cup(participants, name, prizes, user):
+    return participants[0]
+
+def simulate_home_away_cup(participants, name, prizes, user):
+    return participants[0]
+
+def simulate_world_cup(all_teams, user):
+    pass
+
+def run_playoffs(relegated, challengers, user):
+    return challengers[:2], relegated
+
+def present_season_awards(all_teams, user):
+    pass
+
+def generate_sponsorship_offer(ovr):
+    return 10_000_000
+
+def calculate_merchandise_revenue(team, league):
+    return 2_000_000
+
+def generate_national_team_squad(country, all_players):
+    return all_players[:23]
