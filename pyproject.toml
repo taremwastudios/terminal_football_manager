@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "terminal-football-manager"
-version = "0.1.43"
+version = "0.1.44"
 authors = [
   { name="TaremwaStudios", email="author@example.com" },
 ]
