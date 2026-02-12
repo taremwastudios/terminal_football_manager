@@ -10,43 +10,31 @@ from .constants import ATTRIBUTE_WEIGHTS, POSITIONS, COUNTRIES, NATIONAL_FIRST_N
 
 console = Console()
 
+# --- Constants & Prizes ---
+AWARD_PRIZES = {
+    "1st": 20_000_000,
+    "2nd": 10_000_000,
+    "3rd": 5_000_000,
+    "TOTS_PLAYER": 2_000_000
+}
+
+NATIONAL_TEAM_NAMES = [
+    "Brazil", "Germany", "Argentina", "France", "Italy", "Spain", "England", 
+    "Portugal", "Belgium", "Netherlands", "Uruguay", "Croatia", "Mexico", 
+    "USA", "Colombia", "Chile", "Sweden", "Switzerland", "Denmark", "Poland",
+    "Senegal", "Nigeria", "Egypt", "Japan", "South Korea", "Australia"
+]
+
 # --- Commentary Database ---
 COMMENTARY = {
     "START": ["Kickoff! The atmosphere is electric at {stadium}.", "The referee blows the whistle and we are underway!"],
-    "CHANCE": [
-        "{player} finds some space in the box!",
-        "A brilliant through ball by {player} splits the defense!",
-        "{player} is clear on goal! What a chance!",
-        "It's a goalmouth scramble!"
-    ],
-    "SAVE": [
-        "What a save by {keeper}! He tipped it over the bar!",
-        "{keeper} stands tall and denies the striker!",
-        "Incredible reflexes from {keeper} to keep it out!",
-        "The keeper gathers the ball safely."
-    ],
-    "WOODWORK": [
-        "It hits the post! So close for {player}!",
-        "Rattling the crossbar! {player} cannot believe his luck.",
-        "The woodwork denies {player} a certain goal!"
-    ],
-    "GOAL": [
-        "GOAL!!! {player} smashes it into the bottom corner!",
-        "GOAL! A simple tap-in for {player} after a defensive error!",
-        "GOAL! {player} curls it beautifully into the top bins!",
-        "UNBELIEVABLE! {player} with a screamer from 30 yards out!"
-    ],
-    "FOUL": [
-        "Reckless challenge by {player}! The ref is reaching for his pocket.",
-        "A tactical foul by {player} to stop the counter-attack.",
-        "A nasty clash between {player} and his opponent."
-    ],
-    "INJURY": [
-        "{player} is down and looks in serious pain.",
-        "The medical staff are on for {player}. This doesn't look good.",
-        "{player} is hobbling. He might have to come off."
-    ],
-    "END": ["The referee blows for full time!", "It's all over! A hard-fought battle ends here."]
+    "CHANCE": ["{player} finds some space in the box!", "A brilliant through ball by {player} splits the defense!", "{player} is clear on goal!"],
+    "SAVE": ["What a save by {keeper}!", "{keeper} stands tall and denies the striker!", "Incredible reflexes from {keeper}!"],
+    "WOODWORK": ["It hits the post! So close for {player}!", "Rattling the crossbar!"],
+    "GOAL": ["GOAL!!! {player} smashes it home!", "GOAL! A clinical finish by {player}!", "UNBELIEVABLE! {player} scores a worldie!"],
+    "FOUL": ["Reckless challenge by {player}!", "A nasty clash between {player} and his opponent."],
+    "INJURY": ["{player} is down and looks in pain.", "Medical staff are on for {player}."],
+    "END": ["The referee blows for full time!", "It's all over!"]
 }
 
 class League:
@@ -60,20 +48,14 @@ class League:
         self.table = sorted(list(self.teams.values()), key=lambda t: (t.points, t.goal_difference, t.goals_for), reverse=True)
 
     def print_table(self):
-        console.print("\n[bold blue]--- League Table ---[/bold blue]")
-        table = Table(
-            title=f"[bold green]League Standings[/bold green]",
-            show_header=True,
-            header_style="bold magenta",
-            show_lines=True
-        )
+        table = Table(title="League Standings", show_header=True, header_style="bold magenta")
         table.add_column("#", style="dim")
-        table.add_column("Team", style="cyan", min_width=20)
+        table.add_column("Team", style="cyan")
         table.add_column("P", justify="right")
+        table.add_column("GD", justify="right")
         table.add_column("Pts", justify="right", style="bold yellow")
-
         for i, team in enumerate(self.table, 1):
-            table.add_row(str(i), team.name, str(team.games_played), str(team.points))
+            table.add_row(str(i), team.name, str(team.games_played), str(team.goal_difference), str(team.points))
         console.print(table)
 
 def generate_fixtures(teams):
@@ -91,81 +73,45 @@ def generate_fixtures(teams):
     return matchdays
 
 def assign_goal_scorers(team, goals):
-    # This is still used in some places (like international or non-minute simulations)
-    attackers = [p for p in team.players if p.position in ["CF", "SS", "RWF", "LWF"]]
-    midfielders = [p for p in team.players if p.position in ["AMF", "CMF"]]
-    possible_scorers = (attackers * 5) + (midfielders * 2) + team.players
+    if not team.players: return
     for _ in range(goals):
-        if possible_scorers:
-            random.choice(possible_scorers).season_goals += 1
+        scorer = random.choice(team.players)
+        scorer.season_goals += 1
 
 def simulate_match(home_team, away_team, is_international_match=False, user_team_ref=None):
-    if home_team is None or away_team is None:
-        return 0, 0
-
+    if home_team is None or away_team is None: return 0, 0
     is_user_involved = user_team_ref and (home_team == user_team_ref or away_team == user_team_ref)
-    stadium = getattr(home_team, 'stadium_name', "The Stadium")
-
+    stadium = getattr(home_team, 'stadium_name', f"{home_team.name} Stadium")
+    
     if is_user_involved:
-        console.print(Panel(f"[bold green]{home_team.name} vs {away_team.name}[/bold green]\n[cyan]Venue: {stadium}[/cyan]", border_style="blue"))
-        console.print(random.choice(COMMENTARY["START"]).format(stadium=stadium))
-
+        console.print(Panel(f"[bold green]{home_team.name} vs {away_team.name}[/bold green]\n[cyan]Venue: {stadium}[/cyan]"))
+    
     home_goals, away_goals = 0, 0
-    home_ovr = home_team.get_team_ovr()
-    away_ovr = away_team.get_team_ovr()
-
-    # Filter available players (Not Injured, Not Banned)
+    home_ovr, away_ovr = home_team.get_team_ovr(), away_team.get_team_ovr()
     home_eligible = [p for p in home_team.players if p.injury_days == 0 and not p.is_banned]
     away_eligible = [p for p in away_team.players if p.injury_days == 0 and not p.is_banned]
     
     if not home_eligible: home_eligible = home_team.players
     if not away_eligible: away_eligible = away_team.players
 
-    # Minute-by-minute loop
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
-        if is_user_involved:
-            match_task = progress.add_task(f"[yellow]Kickoff...", total=90)
-        
+        task = progress.add_task("Match in progress...", total=90) if is_user_involved else None
         for minute in range(1, 91):
-            if is_user_involved:
-                progress.update(match_task, advance=1, description=f"[yellow]Minute {minute}' - Score: {home_goals}-{away_goals}")
-                if minute % 15 == 0: time.sleep(0.3)
+            if is_user_involved: progress.update(task, advance=1, description=f"Minute {minute}' - {home_goals}:{away_goals}")
+            if random.random() < 0.1:
+                att_team = home_team if random.random() < (home_ovr/(home_ovr+away_ovr)) else away_team
+                def_team = away_team if att_team == home_team else home_team
+                pool = home_eligible if att_team == home_team else away_eligible
+                if not pool: continue
+                player = random.choice(pool)
+                if random.random() < (player.ovr / 200):
+                    if is_user_involved: console.print(f"{minute}' [bold red]GOAL! {player.name} scores![/bold red]")
+                    if att_team == home_team: home_goals += 1
+                    else: away_goals += 1
+                    player.season_goals += 1
+                elif is_user_involved and random.random() < 0.3:
+                    console.print(f"{minute}' {player.name} takes a shot but it's saved!")
 
-            if random.random() < 0.12: # Event chance
-                attacking_team_obj = home_team if random.random() < (home_ovr / (home_ovr + away_ovr)) else away_team
-                defending_team_obj = away_team if attacking_team_obj == home_team else home_team
-                attacker_pool = home_eligible if attacking_team_obj == home_team else away_eligible
-                if not attacker_pool: continue 
-                
-                player = random.choice(attacker_pool)
-                keeper = defending_team_obj.get_starting_goalkeeper()
-
-                sub_event = random.random()
-                if sub_event < 0.6: # Chance
-                    luck = random.uniform(0.7, 1.3)
-                    streak = 1.2 if getattr(player, 'match_streak', 0) >= 3 else 1.0
-                    if random.random() < (player.ovr / 180) * luck * streak:
-                        if is_user_involved: console.print(f"{minute}' [bold red]{random.choice(COMMENTARY['GOAL']).format(player=player.name)}[/bold red]")
-                        if attacking_team_obj == home_team: home_goals += 1
-                        else: away_goals += 1
-                        player.season_goals += 1
-                        player.match_streak = getattr(player, 'match_streak', 0) + 1
-                    else:
-                        if is_user_involved: console.print(f"{minute}' [cyan]{random.choice(COMMENTARY['SAVE']).format(keeper=keeper.name if keeper else 'Keeper')}[/cyan]")
-                elif sub_event < 0.1: # Injury
-                    if is_user_involved: console.print(f"{minute}' [bold red]INJURY! {player.name} is down![/bold red]")
-                    player.injury_days = random.randint(5, 20)
-                    if player in attacker_pool: attacker_pool.remove(player)
-                elif sub_event < 0.15: # Red Card
-                     if random.random() < 0.05:
-                        if is_user_involved: console.print(f"{minute}' [bold red]RED CARD! {player.name} is sent off![/bold red]")
-                        player.is_banned = True
-                        if player in attacker_pool: attacker_pool.remove(player)
-
-    if is_user_involved:
-        console.print(f"[bold red]Full Time: {home_team.name} {home_goals} - {away_goals} {away_team.name}[/bold red]")
-
-    # Update Team Stats
     home_team.games_played += 1; away_team.games_played += 1
     home_team.goals_for += home_goals; home_team.goals_against += away_goals
     away_team.goals_for += away_goals; away_team.goals_against += home_goals
@@ -175,54 +121,34 @@ def simulate_match(home_team, away_team, is_international_match=False, user_team
         away_team.wins += 1; away_team.points += 3; home_team.losses += 1
     else:
         home_team.draws += 1; home_team.points += 1; away_team.draws += 1; away_team.points += 1
-    
     return home_goals, away_goals
 
 def reset_all_team_stats(teams):
-    for team in teams:
-        team.points = 0; team.games_played = 0; team.wins = 0; team.draws = 0; team.losses = 0; team.goals_for = 0; team.goals_against = 0
+    for t in teams:
+        t.points = 0; t.games_played = 0; t.wins = 0; t.draws = 0; t.losses = 0; t.goals_for = 0; t.goals_against = 0
 
 def reset_player_season_stats(teams):
-    for team in teams:
-        for player in team.players:
-            player.season_goals = 0; player.season_clean_sheets = 0
+    for t in teams:
+        for p in t.players: p.season_goals = 0; p.season_clean_sheets = 0
 
-def process_post_match_recovery(team):
-    for player in team.players:
-        if player.injury_days > 0: player.injury_days -= 1
-        if player.is_banned and random.random() > 0.5: player.is_banned = False
+def generate_sponsorship_offer(ovr): return int(10_000_000 * (ovr/80))
+def calculate_merchandise_revenue(team, league): return int(2_000_000 * (team.get_team_ovr()/80))
 
-# Missing functions used in main.py
-def simulate_competition_group_stage(all_participants, competition_name, user_team_ref):
-    # (Simplified for now to prevent crashes)
-    return all_participants[:8]
+def simulate_competition_group_stage(participants, name, user):
+    console.print(f"--- {name} Group Stage ---")
+    return participants[:8]
 
-def simulate_competition_knockout_stage(qualifiers, competition_name, prize_structure, user_team_ref):
+def simulate_competition_knockout_stage(qualifiers, name, prizes, user):
+    console.print(f"--- {name} Knockout ---")
     return qualifiers[0]
 
-def simulate_international_tournament(participants, name, prizes, user):
-    return participants[0]
+def simulate_international_tournament(parts, name, prizes, user): return parts[0]
+def simulate_knockout_cup(parts, name, prizes, user): return parts[0]
+def simulate_home_away_cup(parts, name, prizes, user): return parts[0]
+def simulate_world_cup(teams, user): console.print("Simulating World Cup...")
+def run_playoffs(relegated, challengers, user): return challengers[:2], relegated
 
-def simulate_knockout_cup(participants, name, prizes, user):
-    return participants[0]
+def present_season_awards(teams, user):
+    console.print(Panel("[bold gold1]End of Season Awards[/bold gold1]"))
 
-def simulate_home_away_cup(participants, name, prizes, user):
-    return participants[0]
-
-def simulate_world_cup(all_teams, user):
-    pass
-
-def run_playoffs(relegated, challengers, user):
-    return challengers[:2], relegated
-
-def present_season_awards(all_teams, user):
-    pass
-
-def generate_sponsorship_offer(ovr):
-    return 10_000_000
-
-def calculate_merchandise_revenue(team, league):
-    return 2_000_000
-
-def generate_national_team_squad(country, all_players):
-    return all_players[:23]
+def generate_national_team_squad(country, players): return [p for p in players if p.country == country][:23]
