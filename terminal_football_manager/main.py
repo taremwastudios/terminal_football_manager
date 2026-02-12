@@ -1171,8 +1171,8 @@ def main():
     
     while True:
         console.print("\n[bold blue]--- Main Menu ---[/bold blue]")
-        console.print("1. Start New Game (Manager Mode)")
-        console.print("2. Load Game (Manager Mode)")
+        console.print("1. Start New Game")
+        console.print("2. Load Game")
         console.print("3. Start Player Career Mode")
         console.print("4. FUT Mode")
         console.print("5. Exit")
