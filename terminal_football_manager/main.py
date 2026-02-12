@@ -13,6 +13,16 @@ from .persistence import save_game, load_game
 from .models import Player, Team
 from .player_career import run_player_career_mode, HeroPlayer
 from .fut_mode import run_fut_mode, FutClub
+from .game_logic import (
+    League, generate_fixtures, assign_goal_scorers, simulate_match, 
+    reset_all_team_stats, reset_player_season_stats, 
+    simulate_competition_group_stage, simulate_competition_knockout_stage, 
+    simulate_international_tournament, simulate_knockout_cup, 
+    simulate_home_away_cup, generate_sponsorship_offer, 
+    calculate_merchandise_revenue, generate_national_team_squad, 
+    simulate_world_cup, AWARD_PRIZES, NATIONAL_TEAM_NAMES,
+    present_season_awards, run_playoffs
+)
 
 # --- Data Structures ---
 
