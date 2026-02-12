@@ -1,7 +1,6 @@
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.live import Live
 import random
 import time
 from datetime import datetime, timedelta
@@ -26,8 +25,8 @@ class FutClub:
         self.points = 0
         self.games_played_in_season = 0
         self.next_match_time = None 
-        self.transfer_market = [] # List of Auction objects
-        self.my_bids = [] # Tracks auctions the user has bid on
+        self.transfer_market = [] 
+        self.my_bids = [] 
 
     def to_dict(self):
         return {
@@ -68,11 +67,9 @@ class FutClub:
         self.budget += amount
 
     def get_team_ovr(self):
-        if not self.players:
-            return 0
-        sorted_players = sorted(self.players, key=lambda p: p.ovr, reverse=True)
-        top_11_ovr = [p.ovr for p in sorted_players[:11]]
-        return sum(top_11_ovr) / len(top_11_ovr) if top_11_ovr else 0
+        if not self.players: return 0
+        top_11 = sorted(self.players, key=lambda p: p.ovr, reverse=True)[:11]
+        return sum(p.ovr for p in top_11) / len(top_11)
 
 class Auction:
     def __init__(self, player, seller_name, start_bid, end_time):
@@ -83,149 +80,130 @@ class Auction:
         self.end_time = end_time
 
     def to_dict(self):
-        return {
-            "player": self.player.to_dict(),
-            "seller_name": self.seller_name,
-            "current_bid": self.current_bid,
-            "highest_bidder": self.highest_bidder,
-            "end_time": self.end_time.isoformat()
-        }
+        return {"player": self.player.to_dict(), "seller_name": self.seller_name, "current_bid": self.current_bid, "highest_bidder": self.highest_bidder, "end_time": self.end_time.isoformat()}
 
     @classmethod
     def from_dict(cls, data):
-        return cls(
-            Player.from_dict(data["player"]),
-            data["seller_name"],
-            data["current_bid"],
-            datetime.fromisoformat(data["end_time"])
-        )
+        auc = cls(Player.from_dict(data["player"]), data["seller_name"], data["current_bid"], datetime.fromisoformat(data["end_time"]))
+        auc.highest_bidder = data.get("highest_bidder")
+        return auc
 
 def simulate_market_activity(fut_club):
-    """Simulates rival bids on active auctions."""
     now = datetime.now()
+    if len(fut_club.transfer_market) < 10:
+        for _ in range(3):
+            p = _generate_random_player(60, 90)
+            fut_club.transfer_market.append(Auction(p, "AI_Manager", p.market_value//2, now + timedelta(hours=random.randint(1, 48))))
     
-    # 1. Simulate new listings if market is empty-ish
-    if len(fut_club.transfer_market) < 5:
-        for _ in range(random.randint(1, 3)):
-            new_player = _generate_random_player(70, 85)
-            end_time = now + timedelta(hours=random.randint(1, 24))
-            start_bid = new_player.market_value // 2
-            auction = Auction(new_player, f"Manager_{random.randint(100, 999)}", start_bid, end_time)
-            fut_club.transfer_market.append(auction)
-
-    # 2. Simulate rival bids on existing auctions
-    for auc in fut_club.transfer_market:
-        if auc.end_time > now:
-            time_left = (auc.end_time - now).total_seconds()
-            bid_chance = 0.1
-            if time_left < 3600: bid_chance += 0.2
-            if auc.current_bid < auc.player.market_value * 0.8: bid_chance += 0.3
-            
-            if random.random() < bid_chance:
-                increment = int(auc.current_bid * random.uniform(0.05, 0.15))
-                auc.current_bid += increment
-                auc.highest_bidder = f"Manager_{random.randint(100, 999)}"
-
-    # 3. Clean up expired auctions
-    active_auctions = []
-    for auc in fut_club.transfer_market:
-        if auc.end_time > now:
-            active_auctions.append(auc)
-        else:
+    for auc in fut_club.transfer_market[:]:
+        if auc.end_time <= now:
             if auc.highest_bidder == "YOU":
                 fut_club.add_player(auc.player)
-                console.print(Panel(f"[bold green]WON AUCTION![/bold green] You signed {auc.player.name} for €{auc.current_bid:,}!", style="green"))
-            elif auc in fut_club.my_bids:
-                console.print(Panel(f"[bold red]LOST AUCTION[/bold red] {auc.player.name} sold to {auc.highest_bidder} for €{auc.current_bid:,}.", style="red"))
-    
-    fut_club.transfer_market = active_auctions
+                console.print(f"[bold green]Auction Won! {auc.player.name} added to squad.[/bold green]")
+            elif auc.seller_name == "YOU" and auc.highest_bidder:
+                fut_club.add_budget(auc.current_bid)
+                console.print(f"[bold green]Player Sold! You received €{auc.current_bid:,} for {auc.player.name}.[/bold green]")
+            fut_club.transfer_market.remove(auc)
+        elif random.random() < 0.1 and auc.seller_name == "YOU": # AI bids on user's player
+            auc.current_bid = int(auc.current_bid * 1.1)
+            auc.highest_bidder = f"AI_{random.randint(1,999)}"
 
-def train_players(fut_club):
-    while True:
-        console.print("\n[bold blue]--- Training Ground ---[/bold blue]")
-        console.print(f"Budget: [green]€{fut_club.budget:,}[/green]")
-        eligible = [p for p in fut_club.players if p.injury_days == 0]
-        for i, p in enumerate(eligible[:10]):
-             console.print(f"[{i+1}] {p.name} (OVR: {p.ovr})")
-        
-        choice = console.input("[bold yellow]Select player to train (or 0 to back): [/bold yellow]")
-        if choice == '0': break
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(eligible):
-                player = eligible[idx]
-                if fut_club.budget >= 5000:
-                    fut_club.budget -= 5000
-                    attr = random.choice(list(player.attributes.keys()))
-                    player.attributes[attr] += random.randint(1, 3)
-                    if random.random() < 0.2: player.ovr += 1
-                    console.print(f"[green]Trained {player.name}![/green]")
-                else:
-                    console.print("[red]Not enough coins![/red]")
-        except ValueError:
-            console.print("[red]Invalid input.[/red]")
+def open_player_pack(fut_club, pack_name):
+    pack = PLAYER_PACKS.get(pack_name)
+    if not pack or fut_club.budget < pack.price:
+        console.print("[red]Insufficient funds![/red]")
+        return
+    fut_club.budget -= pack.price
+    console.print(f"Opening {pack_name}...")
+    time.sleep(1)
+    p_data = random.choice(get_players_by_ovr_range(pack.guaranteed_ovr_range[0], pack.guaranteed_ovr_range[1]))
+    new_p = Player(p_data.name, p_data.position, p_data.age, random.randint(pack.guaranteed_ovr_range[0], pack.guaranteed_ovr_range[1]), {a: 80 for a in ["Pace", "Shooting", "Passing", "Dribbling", "Defending", "Physical"]}, p_data.country)
+    fut_club.add_player(new_p)
+    console.print(Panel(f"You got [bold cyan]{new_p.name}[/bold cyan] (OVR: {new_p.ovr})!", border_style="green"))
 
 def run_transfer_market(fut_club):
     while True:
         simulate_market_activity(fut_club)
-        console.print("\n[bold blue]--- FUT Transfer Market ---[/bold blue]")
-        console.print(f"Your Budget: [green]€{fut_club.budget:,}[/green]")
+        console.print("\n[bold blue]--- Transfer Market ---[/bold blue]")
         console.print("1. Browse Auctions\n2. List a Player\n3. Back")
-        choice = console.input("[bold yellow]Choice: [/bold yellow]")
+        choice = console.input("Choice: ")
         if choice == '1':
-            table = Table(title="Live Auctions")
-            table.add_column("ID"); table.add_column("Player"); table.add_column("Current Bid")
-            for i, auc in enumerate(fut_club.transfer_market):
-                table.add_row(str(i+1), auc.player.name, f"€{auc.current_bid:,}")
+            table = Table(title="Auctions")
+            table.add_column("ID"); table.add_column("Player"); table.add_column("OVR"); table.add_column("Bid")
+            for i, a in enumerate(fut_club.transfer_market):
+                table.add_row(str(i+1), a.player.name, str(a.player.ovr), f"€{a.current_bid:,}")
             console.print(table)
-            # Bid logic here...
+            idx = int(console.input("Bid on ID (0 to cancel): ")) - 1
+            if 0 <= idx < len(fut_club.transfer_market):
+                auc = fut_club.transfer_market[idx]
+                bid = int(auc.current_bid * 1.1)
+                if fut_club.budget >= bid:
+                    fut_club.budget -= bid
+                    auc.current_bid = bid
+                    auc.highest_bidder = "YOU"
+                    console.print("[green]Bid placed![/green]")
         elif choice == '2':
-            # Sell logic here...
-            pass
+            for i, p in enumerate(fut_club.players): console.print(f"[{i+1}] {p.name} (OVR: {p.ovr})")
+            idx = int(console.input("List ID: ")) - 1
+            if 0 <= idx < len(fut_club.players):
+                p = fut_club.players.pop(idx)
+                fut_club.transfer_market.append(Auction(p, "YOU", p.market_value//2, datetime.now() + timedelta(hours=24)))
+                console.print("[green]Player listed![/green]")
         elif choice == '3': break
 
+def train_players(fut_club):
+    while True:
+        console.print("\n[bold blue]--- Training Ground ---[/bold blue]")
+        for i, p in enumerate(fut_club.players):
+            console.print(f"[{i+1}] {p.name} (OVR: {p.ovr})")
+        choice = console.input("Select player (0 to back): ")
+        if choice == '0': break
+        idx = int(choice) - 1
+        if 0 <= idx < len(fut_club.players):
+            p = fut_club.players[idx]
+            if fut_club.budget >= 5000:
+                fut_club.budget -= 5000
+                p.ovr += 1
+                console.print(f"[green]{p.name} OVR increased to {p.ovr}![/green]")
+            else: console.print("[red]Need €5,000![/red]")
+
 def _generate_random_player(min_ovr, max_ovr):
-    pos = random.choice(POSITIONS)
-    age = random.randint(17, 35)
     country = random.choice(COUNTRIES)
-    first_name = random.choice(NATIONAL_FIRST_NAMES.get(country, FIRST_NAMES))
-    last_name = random.choice(NATIONAL_LAST_NAMES.get(country, LAST_NAMES))
-    ovr = random.randint(min_ovr, max_ovr)
-    player_attributes = {attr: max(10, min(150, int(ovr * (1 + weight)))) for attr, weight in ATTRIBUTE_WEIGHTS.get(pos, {}).items()}
-    return Player(f"{first_name} {last_name}", pos, age, ovr, player_attributes, country)
+    name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
+    return Player(name, random.choice(POSITIONS), random.randint(18, 35), random.randint(min_ovr, max_ovr), {a: 70 for a in ["Pace", "Shooting", "Passing", "Dribbling", "Defending", "Physical"]}, country)
 
 def open_starter_pack(fut_club):
-    console.print("\n[bold magenta]Opening your Starter Pack...[/bold magenta]")
-    time.sleep(1)
-    for _ in range(15): fut_club.add_player(_generate_random_player(50, 64))
-    for _ in range(5): fut_club.add_player(_generate_random_player(65, 74))
-    for _ in range(2): fut_club.add_player(_generate_random_player(75, 80))
-    console.print(Panel("[bold green]Starter Pack Opened! 22 players added.[/bold green]"))
+    for _ in range(22): fut_club.add_player(_generate_random_player(50, 80))
 
 def run_fut_mode(fut_club=None):
     if fut_club is None:
-        console.print("\n[bold blue]--- Creating Your FUT Identity ---[/bold blue]")
-        team_name = console.input("[bold yellow]Team Name: [/bold yellow]")
-        stadium_name = console.input("[bold yellow]Stadium Name: [/bold yellow]")
-        fut_club = FutClub(team_name, 100_000)
-        fut_club.stadium_name = stadium_name
+        name = console.input("Team Name: ")
+        fut_club = FutClub(name, 100_000)
         open_starter_pack(fut_club)
-        save_game("FUT", fut_club.to_dict())
-
+    
     while True:
-        now = datetime.now()
-        console.print(f"\n[bold blue]--- FUT Menu (Div {fut_club.division}) ---[/bold blue]")
+        simulate_market_activity(fut_club)
+        console.print(f"\n[bold magenta]{fut_club.name} Central[/bold magenta]")
         console.print(f"Budget: €{fut_club.budget:,} | OVR: {fut_club.get_team_ovr():.1f}")
-        console.print("1. Play Season Match\n2. Transfer Market\n3. Training\n4. Save & Exit")
-        choice = console.input("[bold yellow]Choice: [/bold yellow]")
+        if fut_club.next_match_time and datetime.now() < fut_club.next_match_time:
+            console.print(f"[yellow]Next Match in: {fut_club.next_match_time - datetime.now()}[/yellow]")
+        
+        console.print("1. View Match Status\n2. Transfer Market\n3. Training\n4. Store (Packs)\n5. Save & Exit")
+        choice = console.input("Choice: ")
         if choice == '1':
-            if fut_club.next_match_time and now < fut_club.next_match_time:
-                console.print(f"[red]Wait for rest.[/red]")
-                continue
-            # Match logic...
-            fut_club.next_match_time = now + timedelta(days=1)
+            if fut_club.next_match_time and datetime.now() < fut_club.next_match_time:
+                console.print("[yellow]No matches live. Check back later![/yellow]")
+            else:
+                console.print("[bold green]MATCH DAY![/bold green]")
+                # Simulate a match against random OVR
+                simulate_match(Team(fut_club.name), Team("Rival FC"), user_team_ref=Team(fut_club.name))
+                fut_club.next_match_time = datetime.now() + timedelta(minutes=30) # 30 min cooldown for testing
         elif choice == '2': run_transfer_market(fut_club)
         elif choice == '3': train_players(fut_club)
         elif choice == '4':
+            for p_name, p_data in PLAYER_PACKS.items(): console.print(f"- {p_name}: €{p_data.price:,}")
+            p_choice = console.input("Buy pack (name) or 'back': ")
+            if p_choice != 'back': open_player_pack(fut_club, p_choice)
+        elif choice == '5':
             save_game("FUT", fut_club.to_dict())
             break
