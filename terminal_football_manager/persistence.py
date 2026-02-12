@@ -20,11 +20,9 @@ def save_game(mode, data):
     try:
         with open(SAVE_FILE, 'w') as f:
             json.dump(full_data, f, indent=4)
-        console.print(f"
-[bold green]Game saved successfully! (Mode: {mode})[/bold green]")
+        console.print(f"\n[bold green]Game saved successfully! (Mode: {mode})[/bold green]")
     except Exception as e:
-        console.print(f"
-[bold red]Error saving game: {e}[/bold red]")
+        console.print(f"\n[bold red]Error saving game: {e}[/bold red]")
 
 def load_game():
     """
@@ -37,10 +35,8 @@ def load_game():
             full_data = json.load(f)
         mode = full_data.get("mode")
         state = full_data.get("state")
-        console.print(f"
-[bold green]Game loaded successfully! (Mode: {mode})[/bold green]")
+        console.print(f"\n[bold green]Game loaded successfully! (Mode: {mode})[/bold green]")
         return mode, state
     except Exception as e:
-        console.print(f"
-[bold red]Error loading game: {e}[/bold red]")
+        console.print(f"\n[bold red]Error loading game: {e}[/bold red]")
         return None, None
